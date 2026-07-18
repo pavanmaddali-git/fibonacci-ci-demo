@@ -1,0 +1,59 @@
+# Name of the workflow — this is what appears in the Actions tab on GitHub
+name: Fibonacci CI/CD
+
+# When should this workflow trigger?
+on:
+  push:                      # trigger whenever code is pushed
+    branches: [ main ]       # but only for the main branch
+  pull_request:              # also trigger when a pull request targets main
+    branches: [ main ]
+  workflow_dispatch:         # allows manual trigger from the Actions tab with a custom input
+    inputs:
+      number:                # input field name
+        description: "Number of Fibonacci terms to generate"
+        required: false      # optional — if not given, we use the default
+        default: "0"         # default value is 0, matching the app's behaviour
+
+jobs:
+  build-and-test:            # job id (internal name)
+    name: Build, Test and Run Fibonacci   # display name shown in the GitHub UI
+    runs-on: ubuntu-latest   # GitHub gives us a fresh Ubuntu virtual machine
+
+    steps:
+      # Step 1: download the repository code into the VM
+      - name: Checkout repository
+        uses: actions/checkout@v4        # official action that clones your repo
+
+      # Step 2: install Python on the VM
+      - name: Set up Python
+        uses: actions/setup-python@v5    # official action to install Python
+        with:
+          python-version: "3.12"         # the Python version we want
+
+      # Step 3: install test dependencies (pytest)
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip     # upgrade pip to latest
+          pip install -r requirements.txt         # install pytest from requirements file
+
+      # Step 4: run the unit tests — if any test fails, the pipeline stops here (CI part)
+      - name: Run unit tests
+        run: pytest tests/ -v            # -v shows each test name and pass/fail status
+
+      # Step 5: actually run the app and show the output in the logs (CD/demo part)
+      - name: Run Fibonacci app (default = 0)
+        run: python fibonacci.py         # no argument → uses the default value 0
+
+      # Step 6: run again with the manual input number (or 0 if triggered by push)
+      - name: Run Fibonacci app with input number
+        run: python fibonacci.py ${{ github.event.inputs.number || '7' }}
+        # if triggered manually, uses your typed number; on a normal push it demos with 7
+
+      # Step 7: write the output into the GitHub Actions job summary page (nice visible output)
+      - name: Show output in job summary
+        run: |
+          echo "## Fibonacci Pipeline Output" >> $GITHUB_STEP_SUMMARY          # heading
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY                                   # start code block
+          python fibonacci.py ${{ github.event.inputs.number || '7' }} >> $GITHUB_STEP_SUMMARY  # app output
+          echo '```' >> $GITHUB_STEP_SUMMARY                                   # end code block
